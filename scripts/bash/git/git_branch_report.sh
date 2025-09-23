@@ -96,7 +96,7 @@ analyze_repo() {
     
     # Fetch latest remote information (skip if no remote configured or fetch fails)
     if git remote | grep -q .; then
-        git fetch --all --quiet 2>/dev/null || {
+        git fetch --all --prune --quiet 2>/dev/null || {
             echo "Warning: Failed to fetch from remote in $repo_path (continuing with local data)" >&2
         }
     else
