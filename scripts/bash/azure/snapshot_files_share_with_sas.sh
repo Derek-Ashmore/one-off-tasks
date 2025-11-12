@@ -119,12 +119,12 @@ validate_args() {
 }
 
 verify_share_exists() {
-    if ! az storage share show \
+    if ! az storage share-rm show \
         --resource-group "$RESOURCE_GROUP" \
-        --account-name "$STORAGE_ACCOUNT" \
+        --storage-account "$STORAGE_ACCOUNT" \
         --name "$SHARE_NAME" \
-        --auth-mode login \
-        --output none 2>/dev/null; then
+        --query "name" \
+        --output tsv >/dev/null 2>&1; then
         echo "Error: File share '$SHARE_NAME' was not found in storage account '$STORAGE_ACCOUNT' (resource group '$RESOURCE_GROUP')." >&2
         exit 1
     fi
