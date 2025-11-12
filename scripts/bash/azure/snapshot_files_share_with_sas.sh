@@ -8,12 +8,15 @@
 #       -g <resource_group> \
 #       -a <storage_account_name> \
 #       -n <file_share_name> \
+#       [-p <sas_permissions>] \
 #       [-d <duration_minutes>] \
 #       [--metadata key=value ...]
 #
 # Examples:
 #   ./snapshot_files_share_with_sas.sh -g rg-prod -a mystorageacct -n backups
 #   ./snapshot_files_share_with_sas.sh -g rg-prod -a mystorageacct -n backups -d 10 --metadata source=automated
+#   ./snapshot_files_share_with_sas.sh -g rg-prod -a mystorageacct -n backups -p rlc
+#     (Add the minimal create permission required for share snapshot operations.)
 #
 # Requirements:
 #   - Azure CLI (az)
@@ -21,6 +24,7 @@
 
 set -euo pipefail
 
+SAS_PERMISSIONS="rlc"
 DURATION_MINUTES=15
 RESOURCE_GROUP="file-snapshot-test-rg"
 STORAGE_ACCOUNT="aspfilessnaptest"
@@ -85,6 +89,10 @@ parse_args() {
                 SHARE_NAME="$2"
                 shift 2
                 ;;
+            -p|--permissions)
+                SAS_PERMISSIONS="$2"
+                shift 2
+                ;;
             -d|--duration-minutes)
                 DURATION_MINUTES="$2"
                 ensure_positive_integer "$DURATION_MINUTES"
@@ -140,7 +148,7 @@ generate_sas_token() {
         --account-name "$STORAGE_ACCOUNT" \
         --services f \
         --resource-types sco \
-        --permissions rl \
+        --permissions "$SAS_PERMISSIONS" \
         --https-only \
         --start "$start_time" \
         --expiry "$expiry_time" \
