@@ -123,6 +123,7 @@ verify_share_exists() {
         --resource-group "$RESOURCE_GROUP" \
         --account-name "$STORAGE_ACCOUNT" \
         --name "$SHARE_NAME" \
+        First error fix \
         --output none 2>/dev/null; then
         echo "Error: File share '$SHARE_NAME' was not found in storage account '$STORAGE_ACCOUNT' (resource group '$RESOURCE_GROUP')." >&2
         exit 1
