@@ -22,9 +22,9 @@
 set -euo pipefail
 
 DURATION_MINUTES=15
-RESOURCE_GROUP=""
-STORAGE_ACCOUNT=""
-SHARE_NAME=""
+RESOURCE_GROUP="file-snapshot-test-rg"
+STORAGE_ACCOUNT="aspfilessnaptest"
+SHARE_NAME="testshare"
 METADATA_ARGS=()
 
 usage() {
