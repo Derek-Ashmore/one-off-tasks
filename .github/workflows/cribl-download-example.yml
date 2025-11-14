@@ -12,7 +12,7 @@ jobs:
     runs-on: ubuntu-latest
     env:
       PACKAGE: ghcr.io/Derek-Ashmore/one-off-tasks/cribl-linux-x64
-      VERSION: 1.2.3
+      VERSION: latest
     steps:
       - uses: oras-project/setup-oras@v1
 
