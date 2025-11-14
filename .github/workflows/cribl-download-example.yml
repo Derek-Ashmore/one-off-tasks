@@ -1,0 +1,29 @@
+name: Download Cribl Bundle (Example)
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: read
+
+jobs:
+  download:
+    runs-on: ubuntu-latest
+    env:
+      PACKAGE: ghcr.io/example-org/example-repo/cribl-linux-x64
+      VERSION: 1.2.3
+    steps:
+      - uses: oras-project/setup-oras@v1
+
+      - name: Authenticate to GHCR
+        run: |
+          echo "${{ github.token }}" | oras login ghcr.io -u "${{ github.actor }}" --password-stdin
+
+      - name: Download bundle
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts
+          oras pull "${PACKAGE}:${VERSION}" -o artifacts/cribl-linux-x64.tgz
+          ls -lh artifacts
+
