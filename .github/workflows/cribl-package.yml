@@ -1,0 +1,94 @@
+name: Publish Cribl Linux Image
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag_suffix:
+        description: 'Optional suffix appended to the package tag (e.g. "-beta")'
+        required: false
+  schedule:
+    - cron: '0 9 * * *'
+
+permissions:
+  contents: read
+  packages: write
+
+env:
+  PACKAGE_NAME: cribl-linux-x64
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Resolve latest Cribl download URL
+        id: resolve
+        run: |
+          set -euo pipefail
+          url="$(curl -fsSL https://cdn.cribl.io/dl/latest-x64 | tr -d '\r')"
+          if [ -z "$url" ]; then
+            echo "Failed to resolve latest Cribl download URL" >&2
+            exit 1
+          fi
+
+          filename="${url##*/}"
+
+          version="$(echo "$filename" | sed -nE 's/.*([0-9]+(\.[0-9]+)+[a-zA-Z0-9.-]*).*/\1/p')"
+          if [ -z "$version" ]; then
+            version="$(date -u +'%Y.%m.%d-%H%M%S')"
+          fi
+
+          if [ -n "${{ github.event.inputs.tag_suffix }}" ]; then
+            version="${version}${{ github.event.inputs.tag_suffix }}"
+          fi
+
+          echo "download_url=$url" >> "$GITHUB_OUTPUT"
+          echo "filename=$filename" >> "$GITHUB_OUTPUT"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+
+      - name: Download Cribl image
+        run: |
+          set -euo pipefail
+          curl -fSL "${{ steps.resolve.outputs.download_url }}" -o "${{ steps.resolve.outputs.filename }}"
+
+      - name: Compute checksum
+        id: digest
+        run: |
+          set -euo pipefail
+          sha256=$(sha256sum "${{ steps.resolve.outputs.filename }}" | awk '{print $1}')
+          echo "sha256=$sha256" >> "$GITHUB_OUTPUT"
+
+      - uses: oras-project/setup-oras@v1
+
+      - name: Authenticate to GitHub Container Registry
+        run: |
+          echo "${{ github.token }}" | oras login ghcr.io -u "${{ github.actor }}" --password-stdin
+
+      - name: Publish package to GHCR
+        env:
+          PACKAGE: ghcr.io/${{ github.repository_owner }}/${{ env.PACKAGE_NAME }}
+          VERSION: ${{ steps.resolve.outputs.version }}
+        run: |
+          set -euo pipefail
+          cat <<'EOF' > config.json
+          {}
+          EOF
+
+          oras push "${PACKAGE}:${VERSION}" \
+            --config config.json:application/vnd.cncf.oras.config.v1+json \
+            "${{ steps.resolve.outputs.filename }}":application/gzip \
+            --annotation "org.opencontainers.image.title=Cribl Linux x64" \
+            --annotation "org.opencontainers.image.source=${{ github.repository }}" \
+            --annotation "org.opencontainers.image.revision=${{ github.sha }}" \
+            --annotation "org.opencontainers.image.url=${{ steps.resolve.outputs.download_url }}" \
+            --annotation "org.opencontainers.image.created=$(date -u +"%Y-%m-%dT%H:%M:%SZ")" \
+            --annotation "org.opencontainers.image.version=${VERSION}" \
+            --annotation "org.opencontainers.image.description=Cribl Linux x64 binary fetched from ${{
+              steps.resolve.outputs.download_url }}" \
+            --annotation "org.opencontainers.image.sha256=${{ steps.digest.outputs.sha256 }}"
+
+          oras copy "${PACKAGE}:${VERSION}" "${PACKAGE}:latest"
+
+      - name: Share package coordinates
+        run: |
+          echo "Published package: ghcr.io/${{ github.repository_owner }}/${{ env.PACKAGE_NAME }}:${{ steps.resolve.outputs.version }}"
+
