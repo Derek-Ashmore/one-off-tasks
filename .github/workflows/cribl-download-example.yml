@@ -27,3 +27,8 @@ jobs:
           oras pull "${PACKAGE}:${VERSION}" -o artifacts/cribl-linux-x64.tgz
           ls -lh artifacts
 
+      - name: List bundle contents
+        run: |
+          set -euo pipefail
+          tar -tzf artifacts/cribl-linux-x64.tgz
+
