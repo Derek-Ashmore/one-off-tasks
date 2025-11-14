@@ -17,6 +17,14 @@ jobs:
   publish:
     runs-on: ubuntu-latest
     steps:
+      - name: Determine lowercase repository path
+        id: repo
+        shell: bash
+        run: |
+          set -euo pipefail
+          repo="${GITHUB_REPOSITORY,,}"
+          echo "path=$repo" >> "$GITHUB_OUTPUT"
+
       - name: Resolve latest Cribl download URL
         id: resolve
         run: |
@@ -62,7 +70,7 @@ jobs:
 
       - name: Publish package to GHCR
         env:
-          PACKAGE: ghcr.io/${{ github.repository }}/cribl-linux-x64
+          PACKAGE: ghcr.io/${{ steps.repo.outputs.path }}/cribl-linux-x64
           VERSION: ${{ steps.resolve.outputs.version }}
         run: |
           set -euo pipefail
@@ -87,5 +95,5 @@ jobs:
 
       - name: Share package coordinates
         run: |
-          echo "Published package: ghcr.io/${{ github.repository }}/cribl-linux-x64:${{ steps.resolve.outputs.version }}"
+          echo "Published package: ghcr.io/${{ steps.repo.outputs.path }}/cribl-linux-x64:${{ steps.resolve.outputs.version }}"
 
