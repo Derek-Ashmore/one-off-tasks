@@ -30,5 +30,12 @@ jobs:
       - name: List bundle contents
         run: |
           set -euo pipefail
-          tar -tzf artifacts/cribl-linux-x64.tgz
+          bundle="$(find artifacts -maxdepth 2 -type f -name '*.tgz' -print -quit)"
+          if [ -z "$bundle" ]; then
+            echo "No .tgz bundle found in artifacts" >&2
+            ls -R artifacts || true
+            exit 1
+          fi
+          echo "Listing contents of $bundle"
+          tar -tzf "$bundle"
 
