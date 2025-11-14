@@ -27,3 +27,15 @@ jobs:
           oras pull "${PACKAGE}:${VERSION}" -o artifacts/cribl-linux-x64.tgz
           ls -lh artifacts
 
+      - name: List bundle contents
+        run: |
+          set -euo pipefail
+          bundle="$(find artifacts -maxdepth 2 -type f -name '*.tgz' -print -quit)"
+          if [ -z "$bundle" ]; then
+            echo "No .tgz bundle found in artifacts" >&2
+            ls -R artifacts || true
+            exit 1
+          fi
+          echo "Listing contents of $bundle"
+          tar -tzf "$bundle"
+
