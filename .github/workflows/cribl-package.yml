@@ -6,8 +6,6 @@ on:
       tag_suffix:
         description: 'Optional suffix appended to the package tag (e.g. "-beta")'
         required: false
-  schedule:
-    - cron: '0 9 * * *'
 
 permissions:
   contents: read

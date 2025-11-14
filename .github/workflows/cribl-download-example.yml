@@ -2,6 +2,23 @@ name: Download Cribl Bundle (Example)
 
 on:
   workflow_dispatch:
+    inputs:
+      organization:
+        description: GHCR organization/owner
+        type: string
+        default: derek-ashmore
+      repository:
+        description: Repository or namespace in GHCR
+        type: string
+        default: one-off-tasks
+      image:
+        description: Image name in the repository
+        type: string
+        default: cribl-linux-x64
+      version:
+        description: Image version/tag to download
+        type: string
+        default: latest
 
 permissions:
   contents: read
@@ -11,8 +28,11 @@ jobs:
   download:
     runs-on: ubuntu-latest
     env:
-      PACKAGE: ghcr.io/derek-ashmore/one-off-tasks/cribl-linux-x64
-      VERSION: latest
+      ORGANIZATION: ${{ inputs.organization }}
+      REPOSITORY: ${{ inputs.repository }}
+      IMAGE: ${{ inputs.image }}
+      PACKAGE: ghcr.io/${{ inputs.organization }}/${{ inputs.repository }}/${{ inputs.image }}
+      VERSION: ${{ inputs.version }}
     steps:
       - uses: oras-project/setup-oras@v1
 
