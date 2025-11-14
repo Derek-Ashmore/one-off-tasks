@@ -11,8 +11,8 @@ jobs:
   download:
     runs-on: ubuntu-latest
     env:
-      PACKAGE: ghcr.io/example-org/example-repo/cribl-linux-x64
-      VERSION: 1.2.3
+      PACKAGE: ghcr.io/derek-ashmore/one-off-tasks/cribl-linux-x64
+      VERSION: latest
     steps:
       - uses: oras-project/setup-oras@v1
 
