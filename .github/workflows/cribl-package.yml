@@ -60,7 +60,18 @@ jobs:
           sha256=$(sha256sum "${{ steps.resolve.outputs.filename }}" | awk '{print $1}')
           echo "sha256=$sha256" >> "$GITHUB_OUTPUT"
 
-      - uses: oras-project/setup-oras@v1
+      - name: Install ORAS CLI
+        run: |
+          set -euo pipefail
+          version="1.2.0"
+          tmpdir="$(mktemp -d)"
+          curl -fsSL "https://github.com/oras-project/oras/releases/download/v${version}/oras_${version}_linux_amd64.tar.gz" \
+            -o "${tmpdir}/oras.tar.gz"
+          tar -xzf "${tmpdir}/oras.tar.gz" -C "${tmpdir}" oras
+          mkdir -p "${HOME}/.local/bin"
+          install -m 0755 "${tmpdir}/oras" "${HOME}/.local/bin/oras"
+          echo "${HOME}/.local/bin" >> "$GITHUB_PATH"
+          rm -rf "${tmpdir}"
 
       - name: Authenticate to GitHub Container Registry
         run: |
