@@ -6,10 +6,12 @@ on:
       key_vault_name:
         description: Azure Key Vault name
         type: string
+        default: flux-dns-keyvault
         required: true
       resource_group:
         description: Azure Resource Group name
         type: string
+        default: DNS-Management-RG
         required: true
       secret_name:
         description: Secret name in Key Vault
