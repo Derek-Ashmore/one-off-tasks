@@ -1,0 +1,207 @@
+name: Certificate to Azure Key Vault
+
+on:
+  workflow_dispatch:
+    inputs:
+      key_vault_name:
+        description: Azure Key Vault name
+        type: string
+        required: true
+      resource_group:
+        description: Azure Resource Group name
+        type: string
+        required: true
+      secret_name:
+        description: Secret name in Key Vault
+        type: string
+        default: self-signed-certificate
+      certificate_days:
+        description: Certificate validity in days
+        type: number
+        default: 365
+
+permissions:
+  contents: read
+
+jobs:
+  certificate-management:
+    runs-on: ubuntu-latest
+    env:
+      KEY_VAULT_NAME: ${{ inputs.key_vault_name }}
+      RESOURCE_GROUP: ${{ inputs.resource_group }}
+      SECRET_NAME: ${{ inputs.secret_name }}
+      CERT_DAYS: ${{ inputs.certificate_days }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Azure Login
+        uses: azure/login@v2
+        with:
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
+
+      - name: Generate self-signed certificate
+        id: generate_cert
+        run: |
+          set -euo pipefail
+          
+          # Generate private key
+          openssl genrsa -out cert.key 2048
+          
+          # Generate self-signed certificate
+          openssl req -new -x509 -key cert.key -out cert.crt -days "$CERT_DAYS" \
+            -subj "/CN=self-signed-cert/OU=GitHub-Actions/O=One-Off-Tasks" \
+            -addext "subjectAltName=DNS:localhost,DNS:*.localhost,IP:127.0.0.1"
+          
+          # Combine certificate and key into PEM format
+          cat cert.crt cert.key > cert.pem
+          
+          echo "Certificate generated successfully"
+          ls -lh cert.*
+
+      - name: Validate generated certificate
+        run: |
+          set -euo pipefail
+          
+          echo "Validating generated certificate..."
+          
+          # Validate certificate file
+          if ! openssl x509 -in cert.crt -text -noout > /dev/null 2>&1; then
+            echo "Error: Generated certificate is invalid"
+            exit 1
+          fi
+          
+          # Check certificate details
+          echo "Certificate details:"
+          openssl x509 -in cert.crt -text -noout | grep -E "(Subject:|Issuer:|Validity|Not Before|Not After)"
+          
+          # Verify certificate validity period
+          NOT_AFTER=$(openssl x509 -in cert.crt -noout -enddate | cut -d= -f2)
+          echo "Certificate valid until: $NOT_AFTER"
+          
+          echo "✓ Generated certificate is valid"
+
+      - name: Base64 encode certificate
+        id: encode_cert
+        run: |
+          set -euo pipefail
+          
+          # Base64 encode the certificate (PEM format)
+          CERT_B64=$(base64 -w 0 cert.pem)
+          echo "Certificate encoded (length: ${#CERT_B64} characters)"
+          
+          # Store in output for potential debugging (truncated)
+          echo "cert_b64_length=${#CERT_B64}" >> $GITHUB_OUTPUT
+          
+          # Save to file for Azure CLI
+          echo "$CERT_B64" > cert_base64.txt
+
+      - name: Store certificate in Azure Key Vault
+        run: |
+          set -euo pipefail
+          
+          echo "Storing certificate in Azure Key Vault: $KEY_VAULT_NAME"
+          
+          # Read base64 encoded certificate
+          CERT_B64=$(cat cert_base64.txt)
+          
+          # Store as secret in Key Vault
+          az keyvault secret set \
+            --vault-name "$KEY_VAULT_NAME" \
+            --name "$SECRET_NAME" \
+            --value "$CERT_B64" \
+            --output table
+          
+          echo "✓ Certificate stored successfully in Key Vault"
+
+      - name: Retrieve certificate from Azure Key Vault
+        id: retrieve_cert
+        run: |
+          set -euo pipefail
+          
+          echo "Retrieving certificate from Azure Key Vault: $KEY_VAULT_NAME"
+          
+          # Retrieve secret from Key Vault
+          RETRIEVED_B64=$(az keyvault secret show \
+            --vault-name "$KEY_VAULT_NAME" \
+            --name "$SECRET_NAME" \
+            --query "value" \
+            --output tsv)
+          
+          if [ -z "$RETRIEVED_B64" ]; then
+            echo "Error: Failed to retrieve secret from Key Vault"
+            exit 1
+          fi
+          
+          echo "Secret retrieved (length: ${#RETRIEVED_B64} characters)"
+          
+          # Save retrieved base64 to file
+          echo "$RETRIEVED_B64" > retrieved_cert_base64.txt
+          
+          echo "✓ Certificate retrieved successfully from Key Vault"
+
+      - name: Base64 decode retrieved certificate
+        run: |
+          set -euo pipefail
+          
+          echo "Decoding retrieved certificate..."
+          
+          # Decode base64 certificate
+          base64 -d retrieved_cert_base64.txt > retrieved_cert.pem
+          
+          # Extract certificate and key separately for validation
+          # Extract certificate (between BEGIN and END CERTIFICATE)
+          sed -n '/-----BEGIN CERTIFICATE-----/,/-----END CERTIFICATE-----/p' retrieved_cert.pem > retrieved_cert.crt
+          
+          # Extract private key (between BEGIN and END PRIVATE KEY or RSA PRIVATE KEY)
+          sed -n '/-----BEGIN.*PRIVATE KEY-----/,/-----END.*PRIVATE KEY-----/p' retrieved_cert.pem > retrieved_cert.key
+          
+          echo "✓ Certificate decoded successfully"
+          ls -lh retrieved_cert.*
+
+      - name: Validate retrieved certificate
+        run: |
+          set -euo pipefail
+          
+          echo "Validating retrieved certificate..."
+          
+          # Validate certificate file
+          if ! openssl x509 -in retrieved_cert.crt -text -noout > /dev/null 2>&1; then
+            echo "Error: Retrieved certificate is invalid"
+            exit 1
+          fi
+          
+          # Validate private key
+          if ! openssl rsa -in retrieved_cert.key -check -noout > /dev/null 2>&1; then
+            echo "Error: Retrieved private key is invalid"
+            exit 1
+          fi
+          
+          # Check certificate details
+          echo "Retrieved certificate details:"
+          openssl x509 -in retrieved_cert.crt -text -noout | grep -E "(Subject:|Issuer:|Validity|Not Before|Not After)"
+          
+          # Verify certificate validity period
+          NOT_AFTER=$(openssl x509 -in retrieved_cert.crt -noout -enddate | cut -d= -f2)
+          echo "Certificate valid until: $NOT_AFTER"
+          
+          # Verify certificate matches original
+          ORIGINAL_FINGERPRINT=$(openssl x509 -in cert.crt -fingerprint -noout | cut -d= -f2)
+          RETRIEVED_FINGERPRINT=$(openssl x509 -in retrieved_cert.crt -fingerprint -noout | cut -d= -f2)
+          
+          if [ "$ORIGINAL_FINGERPRINT" != "$RETRIEVED_FINGERPRINT" ]; then
+            echo "Error: Retrieved certificate fingerprint does not match original"
+            echo "Original: $ORIGINAL_FINGERPRINT"
+            echo "Retrieved: $RETRIEVED_FINGERPRINT"
+            exit 1
+          fi
+          
+          echo "✓ Retrieved certificate is valid and matches original"
+          echo "✓ Certificate fingerprint: $ORIGINAL_FINGERPRINT"
+
+      - name: Cleanup
+        if: always()
+        run: |
+          # Clean up local certificate files (security best practice)
+          rm -f cert.* retrieved_cert.* cert_base64.txt retrieved_cert_base64.txt || true
+          echo "Cleanup completed"
